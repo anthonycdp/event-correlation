@@ -1,0 +1,272 @@
+# Security Event Correlation Rules
+# This file contains sample correlation rules for detecting various attack patterns
+
+- rule_id: bf-001
+  name: SSH Brute Force Attack
+  description: Detects multiple failed SSH login attempts from the same source IP
+  enabled: true
+  rule_type: threshold
+  conditions:
+    operator: and
+    conditions:
+      - field: event_type
+        operator: equals
+        value: login_failure
+      - field: dst_port
+        operator: equals
+        value: 22
+  threshold: 5
+  time_window_minutes: 5
+  alert:
+    title: SSH Brute Force Attack Detected
+    description: Multiple failed SSH login attempts detected from the same source IP
+    category: brute_force
+    severity: high
+    mitre_tactics:
+      - Credential Access
+    mitre_techniques:
+      - T1110.001
+  base_score: 70
+  suppression_window_minutes: 30
+  tags:
+    - brute_force
+    - ssh
+    - authentication
+  author: Security Team
+
+- rule_id: bf-002
+  name: RDP Brute Force Attack
+  description: Detects multiple failed RDP login attempts from the same source
+  enabled: true
+  rule_type: threshold
+  conditions:
+    operator: and
+    conditions:
+      - field: event_type
+        operator: equals
+        value: login_failure
+      - field: dst_port
+        operator: equals
+        value: 3389
+  threshold: 10
+  time_window_minutes: 10
+  alert:
+    title: RDP Brute Force Attack Detected
+    description: Multiple failed RDP login attempts detected
+    category: brute_force
+    severity: high
+    mitre_tactics:
+      - Credential Access
+    mitre_techniques:
+      - T1110.001
+  base_score: 65
+  tags:
+    - brute_force
+    - rdp
+
+- rule_id: ps-001
+  name: Port Scan Detection
+  description: Detects sequential port scanning activity from external sources
+  enabled: true
+  rule_type: threshold
+  conditions:
+    conditions:
+      - field: event_type
+        operator: equals
+        value: port_scan
+  threshold: 5
+  time_window_minutes: 5
+  alert:
+    title: Port Scan Activity Detected
+    description: Sequential port scanning detected from external source
+    category: external_attack
+    severity: high
+    mitre_tactics:
+      - Reconnaissance
+    mitre_techniques:
+      - T1046
+  base_score: 60
+  tags:
+    - reconnaissance
+    - port_scan
+
+- rule_id: mal-001
+  name: Malicious IP Communication
+  description: Detects network communication with known malicious IP addresses
+  enabled: true
+  rule_type: single_event
+  conditions:
+    operator: or
+    conditions:
+      - field: src_ip
+        operator: in
+        value:
+          - 185.220.101.42
+          - 91.121.87.100
+          - 45.155.205.233
+          - 193.32.162.89
+      - field: dst_ip
+        operator: in
+        value:
+          - 185.220.101.42
+          - 91.121.87.100
+          - 45.155.205.233
+          - 193.32.162.89
+  alert:
+    title: Communication with Malicious IP Detected
+    description: Network communication with a known malicious IP address was detected
+    category: malware
+    severity: critical
+    mitre_tactics:
+      - Command and Control
+    mitre_techniques:
+      - T1071
+  base_score: 90
+  tags:
+    - malware
+    - c2
+    - threat_intel
+
+- rule_id: dns-001
+  name: Suspicious DNS Query
+  description: Detects DNS queries to suspicious or malicious domains
+  enabled: true
+  rule_type: single_event
+  conditions:
+    operator: or
+    conditions:
+      - field: metadata.domain
+        operator: regex
+        value: ".*(evil|malware|c2|exfil|attacker).*"
+  alert:
+    title: Suspicious DNS Query Detected
+    description: DNS query to a potentially malicious domain was detected
+    category: data_exfiltration
+    severity: high
+    mitre_tactics:
+      - Exfiltration
+      - Command and Control
+    mitre_techniques:
+      - T1048.003
+      - T1071.004
+  base_score: 75
+  tags:
+    - dns
+    - exfiltration
+    - c2
+
+- rule_id: lm-001
+  name: Lateral Movement Detection
+  description: Detects potential lateral movement through internal network
+  enabled: true
+  rule_type: sequence
+  conditions:
+    conditions:
+      - field: src_ip
+        operator: exists
+        value: null
+  sequence:
+    - conditions:
+        - field: event_type
+          operator: equals
+          value: login_success
+    - conditions:
+        - field: event_type
+          operator: equals
+          value: connection
+        - field: dst_port
+          operator: in
+          value: [22, 3389, 445, 135]
+  sequence_timeout_minutes: 30
+  alert:
+    title: Potential Lateral Movement Detected
+    description: Sequence of events suggests lateral movement within the network
+    category: lateral_movement
+    severity: high
+    mitre_tactics:
+      - Lateral Movement
+    mitre_techniques:
+      - T1021
+  base_score: 80
+  tags:
+    - lateral_movement
+    - insider_threat
+
+- rule_id: auth-001
+  name: Account Lockout Detection
+  description: Detects account lockout events which may indicate brute force attacks
+  enabled: true
+  rule_type: single_event
+  conditions:
+    conditions:
+      - field: event_type
+        operator: equals
+        value: account_lockout
+  alert:
+    title: Account Lockout Detected
+    description: An account has been locked out, possibly due to brute force attack
+    category: brute_force
+    severity: medium
+    mitre_tactics:
+      - Credential Access
+    mitre_techniques:
+      - T1110
+  base_score: 50
+  tags:
+    - account
+    - lockout
+
+- rule_id: firewall-001
+  name: Blocked External Connection
+  description: Detects connections blocked by firewall policy
+  enabled: true
+  rule_type: threshold
+  conditions:
+    conditions:
+      - field: event_type
+        operator: equals
+        value: connection_denied
+  threshold: 10
+  time_window_minutes: 15
+  alert:
+    title: Multiple Blocked Connections Detected
+    description: Multiple connection attempts were blocked by firewall policy
+    category: policy_violation
+    severity: medium
+  base_score: 40
+  tags:
+    - firewall
+    - blocked
+
+- rule_id: priv-001
+  name: Privilege Escalation Detection
+  description: Detects potential privilege escalation events
+  enabled: true
+  rule_type: sequence
+  conditions:
+    conditions: []
+  sequence:
+    - conditions:
+        - field: event_type
+          operator: equals
+          value: login_success
+        - field: src_user
+          operator: in
+          value: [admin, root, administrator]
+    - conditions:
+        - field: metadata.action
+          operator: in
+          value: [add_to_group, create_user, modify_permissions]
+  sequence_timeout_minutes: 60
+  alert:
+    title: Potential Privilege Escalation Detected
+    description: Sequence suggests privilege escalation activity
+    category: privilege_escalation
+    severity: critical
+    mitre_tactics:
+      - Privilege Escalation
+    mitre_techniques:
+      - T1078
+  base_score: 85
+  tags:
+    - privilege_escalation
